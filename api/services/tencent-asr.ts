@@ -104,14 +104,26 @@ async function callAsrApi(action: string, payload: object): Promise<any> {
 /**
  * 创建识别任务
  * ResTextFormat=3 返回带时间戳的结果
+ * 支持两种模式：
+ *   - URL模式：{ url: string } —— 传入公网可下载的音频URL
+ *   - Data模式：{ data: string, dataLen: number } —— 传入base64编码的音频数据（≤5MB）
  */
-export async function createASRTask(audioUrl: string): Promise<string> {
-  const payload = {
+export async function createASRTask(
+  source: { url: string } | { data: string; dataLen: number },
+): Promise<string> {
+  const payload: Record<string, any> = {
     EngineModelType: '16k_zh',
     ChannelNum: 1,
     ResTextFormat: 3,
-    Url: audioUrl,
-    SourceType: 0,
+  }
+
+  if ('url' in source) {
+    payload.SourceType = 0
+    payload.Url = source.url
+  } else {
+    payload.SourceType = 1
+    payload.Data = source.data
+    payload.DataLen = source.dataLen
   }
 
   const result: any = await callAsrApi('CreateRecTask', payload)

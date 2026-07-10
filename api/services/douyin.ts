@@ -1,9 +1,60 @@
 // 抖音服务 - 仅使用 fetch API，不依赖 Node.js 专有模块
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
 import type { VideoInfo } from '../../shared/types.js'
 
 const DOUYIN_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
 const DOUYIN_REFERER = 'https://www.douyin.com/'
+
+// 临时视频文件目录
+const VIDEO_TEMP_DIR = path.join(os.tmpdir(), 'douyin-video-temp')
+try {
+  if (!fs.existsSync(VIDEO_TEMP_DIR)) {
+    fs.mkdirSync(VIDEO_TEMP_DIR, { recursive: true })
+  }
+} catch {}
+
+/**
+ * 下载抖音视频到临时文件
+ * 抖音CDN需要特定请求头，否则可能被拒绝
+ */
+export async function downloadVideoFile(
+  videoUrl: string,
+): Promise<{ filePath: string; size: number }> {
+  const resp = await fetch(videoUrl, {
+    headers: {
+      'User-Agent': DOUYIN_UA,
+      Referer: DOUYIN_REFERER,
+    },
+  })
+  if (!resp.ok) {
+    throw new Error(`下载抖音视频失败: HTTP ${resp.status}`)
+  }
+  const arrayBuffer = await resp.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const filePath = path.join(VIDEO_TEMP_DIR, `${id}.mp4`)
+  fs.writeFileSync(filePath, buffer)
+  return { filePath, size: buffer.length }
+}
+
+/**
+ * 清理临时视频文件
+ */
+export function cleanupVideoFile(
+  filePath: string,
+  delayMs = 30 * 60 * 1000,
+): void {
+  setTimeout(() => {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+      }
+    } catch {}
+  }, delayMs)
+}
 
 /**
  * 从分享文本中提取 URL

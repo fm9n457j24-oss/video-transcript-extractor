@@ -11,6 +11,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
 import bilibiliRoutes from './routes/bilibili.js'
 import douyinRoutes from './routes/douyin.js'
 import asrRoutes from './routes/asr.js'
@@ -20,9 +21,26 @@ dotenv.config()
 
 const app: express.Application = express()
 
+// 信任反向代理（Railway），以便正确获取 host / protocol
+app.set('trust proxy', true)
+
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+/**
+ * 临时文件服务 —— 供腾讯云ASR下载大文件使用
+ * B站/抖音CDN需要特殊请求头，腾讯云无法直接下载，
+ * 因此先在服务器上下载到临时目录，再通过公开URL提供给腾讯云
+ */
+const audioTempDir = path.join(os.tmpdir(), 'bili-audio-temp')
+if (fs.existsSync(audioTempDir)) {
+  app.use('/audio/temp', express.static(audioTempDir))
+}
+const videoTempDir = path.join(os.tmpdir(), 'douyin-video-temp')
+if (fs.existsSync(videoTempDir)) {
+  app.use('/video/temp', express.static(videoTempDir))
+}
 
 /**
  * API Routes

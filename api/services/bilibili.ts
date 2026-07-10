@@ -1,4 +1,7 @@
 // B站服务 - 仅使用 fetch API，不依赖 Node.js 专有模块
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
 import type {
   TranscriptSegment,
   VideoInfo,
@@ -8,6 +11,54 @@ import type {
 const BILI_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 const BV_REGEX = /BV[a-zA-Z0-9]{10}/
+
+// 临时音频文件目录
+const AUDIO_TEMP_DIR = path.join(os.tmpdir(), 'bili-audio-temp')
+try {
+  if (!fs.existsSync(AUDIO_TEMP_DIR)) {
+    fs.mkdirSync(AUDIO_TEMP_DIR, { recursive: true })
+  }
+} catch {}
+
+/**
+ * 下载音频到临时文件
+ * B站CDN需要 Referer 头，否则返回403，腾讯云ASR直接下载会失败
+ */
+export async function downloadAudioFile(
+  audioUrl: string,
+): Promise<{ filePath: string; size: number }> {
+  const resp = await fetch(audioUrl, {
+    headers: {
+      'User-Agent': BILI_USER_AGENT,
+      Referer: 'https://www.bilibili.com',
+    },
+  })
+  if (!resp.ok) {
+    throw new Error(`下载B站音频失败: HTTP ${resp.status}`)
+  }
+  const arrayBuffer = await resp.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const filePath = path.join(AUDIO_TEMP_DIR, `${id}.m4a`)
+  fs.writeFileSync(filePath, buffer)
+  return { filePath, size: buffer.length }
+}
+
+/**
+ * 清理临时音频文件
+ */
+export function cleanupAudioFile(
+  filePath: string,
+  delayMs = 30 * 60 * 1000,
+): void {
+  setTimeout(() => {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+      }
+    } catch {}
+  }, delayMs)
+}
 
 /**
  * 从 URL 中解析 BV 号（同步，仅正则匹配）
@@ -134,7 +185,9 @@ export async function getAudioStreamUrl(
   const json: any = await resp.json()
   const audio = json?.data?.dash?.audio
   if (!Array.isArray(audio) || audio.length === 0) return null
-  return audio[0].baseUrl || audio[0].base_url || null
+  // 选择最低质量音频流（数组按质量降序，最后一个文件最小）
+  const smallest = audio[audio.length - 1]
+  return smallest.baseUrl || smallest.base_url || null
 }
 
 /**
