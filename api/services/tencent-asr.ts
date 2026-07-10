@@ -8,10 +8,10 @@ const HOST = 'asr.tencentcloudapi.com'
 const SERVICE = 'asr'
 const VERSION = '2019-06-14'
 
-// 环境变量读取
+// 环境变量读取（trim 防止尾部空格/换行符导致签名失败）
 function getEnvVar(name: string): string {
   if (typeof process !== 'undefined' && process.env && process.env[name]) {
-    return process.env[name] as string
+    return (process.env[name] as string).trim()
   }
   return ''
 }

@@ -32,14 +32,23 @@ app.use('/api/douyin', douyinRoutes)
 app.use('/api/asr', asrRoutes)
 
 /**
- * health
+ * health（含环境变量调试信息，不暴露完整密钥）
  */
 app.use(
   '/api/health',
   (req: Request, res: Response, next: NextFunction): void => {
+    const sid = process.env.TENCENT_SECRET_ID || ''
+    const skey = process.env.TENCENT_SECRET_KEY || ''
     res.status(200).json({
       success: true,
       message: 'ok',
+      debug: {
+        secretIdLoaded: sid.length > 0,
+        secretIdPrefix: sid.substring(0, 8),
+        secretIdLength: sid.length,
+        secretKeyLoaded: skey.length > 0,
+        secretKeyLength: skey.length,
+      },
     })
   },
 )
