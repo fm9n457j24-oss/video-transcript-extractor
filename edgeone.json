@@ -1,0 +1,16 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "functions": {
+    "directory": "edge-functions",
+    "routes": [
+      { "pattern": "/api/bilibili", "function": "api/bilibili" },
+      { "pattern": "/api/douyin", "function": "api/douyin" },
+      { "pattern": "/api/asr/poll", "function": "api/asr-poll" }
+    ]
+  },
+  "redirects": [
+    { "source": "/(.*)", "destination": "/index.html", "type": "spa" }
+  ]
+}
