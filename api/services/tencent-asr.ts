@@ -65,12 +65,11 @@ async function callAsrApi(action: string, payload: object): Promise<any> {
   const payloadStr = JSON.stringify(payload)
 
   // ===== 1. 拼接 CanonicalRequest =====
+  // 注意：与官方 SDK sign3 一致，POST 只签 content-type 和 host，不签 x-tc-action
   const hashedRequestPayload = await sha256Hex(payloadStr)
   const canonicalHeaders =
-    'content-type:application/json; charset=utf-8\n' +
-    `host:${HOST}\n` +
-    `x-tc-action:${action.toLowerCase()}\n`
-  const signedHeaders = 'content-type;host;x-tc-action'
+    'content-type:application/json; charset=utf-8\n' + `host:${HOST}\n`
+  const signedHeaders = 'content-type;host'
   const canonicalRequest = [
     'POST',
     '/',
@@ -91,7 +90,7 @@ async function callAsrApi(action: string, payload: object): Promise<any> {
   ].join('\n')
 
   // ===== 3. 计算签名 =====
-  const secretDate = await hmacSha256('TC3-HMAC-SHA256' + secretKey, date)
+  const secretDate = await hmacSha256('TC3' + secretKey, date)
   const secretService = await hmacSha256(secretDate, SERVICE)
   const secretSigning = await hmacSha256(secretService, 'tc3_request')
   const signature = buf2hex(await hmacSha256(secretSigning, stringToSign))
@@ -104,7 +103,6 @@ async function callAsrApi(action: string, payload: object): Promise<any> {
   const headers: Record<string, string> = {
     Authorization: authorization,
     'Content-Type': 'application/json; charset=utf-8',
-    Host: HOST,
     'X-TC-Action': action,
     'X-TC-Timestamp': String(timestamp),
     'X-TC-Version': VERSION,
