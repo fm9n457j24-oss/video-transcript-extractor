@@ -9,6 +9,8 @@ import express, {
 } from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import path from 'path'
+import fs from 'fs'
 import bilibiliRoutes from './routes/bilibili.js'
 import douyinRoutes from './routes/douyin.js'
 import asrRoutes from './routes/asr.js'
@@ -43,6 +45,22 @@ app.use(
 )
 
 /**
+ * 生产环境：serve 前端构建产物（dist 目录）
+ */
+const distPath = path.resolve(process.cwd(), 'dist')
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath))
+  // SPA 回退：所有非 /api 请求都返回 index.html
+  app.get('*', (req: Request, res: Response) => {
+    if (req.path.startsWith('/api/')) {
+      res.status(404).json({ success: false, error: 'API not found' })
+      return
+    }
+    res.sendFile(path.join(distPath, 'index.html'))
+  })
+}
+
+/**
  * error handler middleware
  */
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
@@ -53,7 +71,7 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
 })
 
 /**
- * 404 handler
+ * 404 handler（开发环境，无 dist 目录时）
  */
 app.use((req: Request, res: Response) => {
   res.status(404).json({
