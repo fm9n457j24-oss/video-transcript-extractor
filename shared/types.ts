@@ -47,6 +47,12 @@ export interface ASRPollResponse {
     transcript: TranscriptSegment[];
   };
   error?: string;
+  debug?: {
+    statusCode?: number;
+    statusStr?: string;
+    resultStrPreview?: string;
+    errorMsg?: string;
+  };
 }
 
 // localStorage 历史记录

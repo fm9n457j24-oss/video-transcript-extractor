@@ -49,6 +49,7 @@ export const useExtractStore = create<ExtractState>()((set, get) => {
         const poll = await pollASR(taskId);
         if (poll.status === 'success' && poll.data) {
           const platform = get().platform;
+          const transcript = poll.data.transcript || [];
           const result: ExtractResult = {
             title: partial?.title || poll.data.title || '未知标题',
             cover: partial?.cover || poll.data.cover || '',
@@ -57,14 +58,23 @@ export const useExtractStore = create<ExtractState>()((set, get) => {
             bvid: partial?.bvid,
             platform,
             subtitleSource: 'asr',
-            transcript: poll.data.transcript || [],
+            transcript,
           };
+          // 如果识别成功但文案为空，显示调试信息帮助排查
+          if (transcript.length === 0) {
+            const dbg = poll.debug
+              ? `（调试: status=${poll.debug.statusCode}, str=${poll.debug.statusStr || ''}, preview=${(poll.debug.resultStrPreview || '').substring(0, 200)}）`
+              : '';
+            set({ status: 'error', error: `语音识别完成但未返回文案内容${dbg}` });
+            return;
+          }
           set({ status: 'success', step: 4, result });
           saveToHistory(result, url);
           return;
         }
         if (poll.status === 'failed') {
-          set({ status: 'error', error: poll.error || '语音识别失败' });
+          const dbg = poll.debug?.errorMsg ? `（${poll.debug.errorMsg}）` : '';
+          set({ status: 'error', error: (poll.error || '语音识别失败') + dbg });
           return;
         }
       } catch {

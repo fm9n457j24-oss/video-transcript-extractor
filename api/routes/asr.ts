@@ -32,15 +32,17 @@ router.get('/poll', async (req: Request, res: Response): Promise<void> => {
         success: true,
         status: 'success',
         data: { transcript: result.transcript || [] },
+        debug: result.debug,
       })
     } else if (result.status === 'failed') {
       res.json({
         success: false,
         status: 'failed',
         error: result.error || '识别失败',
+        debug: result.debug,
       })
     } else {
-      res.json({ success: true, status: 'processing' })
+      res.json({ success: true, status: 'processing', debug: result.debug })
     }
   } catch (err: any) {
     res.json({

@@ -140,19 +140,47 @@ export async function createASRTask(
 }
 
 /**
- * 解析 ASR 识别结果（带时间戳，时间为毫秒）
+ * 解析 ASR 识别结果
+ * ResTextFormat=3 返回 { list: [{ start_time, end_time, text }] }，时间为毫秒
+ * ResTextFormat=0/2 返回纯文本或带标点文本
+ * 兼容多种可能的返回格式
  */
 function parseAsrResult(resultStr: string): TranscriptSegment[] {
+  if (!resultStr) return []
   try {
     const result = JSON.parse(resultStr)
-    const list = result.list || []
-    if (!Array.isArray(list)) return []
-    return list.map((item: any) => ({
-      start: (item.start_time || 0) / 1000,
-      end: (item.end_time || 0) / 1000,
-      text: item.text || '',
-    }))
+    // 格式3: { list: [{ start_time, end_time, text }] }
+    const list = result.list
+    if (Array.isArray(list) && list.length > 0) {
+      return list.map((item: any) => ({
+        start: (item.start_time || 0) / 1000,
+        end: (item.end_time || 0) / 1000,
+        text: item.text || '',
+      }))
+    }
+    // 兼容其他可能的数组格式
+    if (Array.isArray(result) && result.length > 0) {
+      return result.map((item: any) => ({
+        start: (item.start_time || item.from || 0) / 1000,
+        end: (item.end_time || item.to || 0) / 1000,
+        text: item.text || item.content || '',
+      }))
+    }
+    // 纯文本兜底：整段作为一个 segment
+    if (typeof result === 'string' && result.trim()) {
+      return [{ start: 0, end: 0, text: result.trim() }]
+    }
+    // { text: "xxx" } 格式
+    if (result.text && typeof result.text === 'string') {
+      return [{ start: 0, end: 0, text: result.text }]
+    }
+    return []
   } catch {
+    // JSON.parse 失败，作为纯文本处理
+    const text = resultStr.trim()
+    if (text) {
+      return [{ start: 0, end: 0, text }]
+    }
     return []
   }
 }
@@ -165,6 +193,12 @@ export async function pollASRTask(taskId: number): Promise<{
   status: 'processing' | 'success' | 'failed'
   transcript?: TranscriptSegment[]
   error?: string
+  debug?: {
+    statusCode?: number
+    statusStr?: string
+    resultStrPreview?: string
+    errorMsg?: string
+  }
 }> {
   const payload = { TaskId: taskId }
   const result: any = await callAsrApi('DescribeTaskStatus', payload)
@@ -179,21 +213,39 @@ export async function pollASRTask(taskId: number): Promise<{
   const data = result?.Response?.Data || {}
   const task = data.Task || data
   const status = task?.Status
+  const statusStr = task?.StatusStr || ''
 
   // 0=待处理 1=处理中
   if (status === 0 || status === 1) {
-    return { status: 'processing' }
+    return {
+      status: 'processing',
+      debug: { statusCode: status, statusStr },
+    }
   }
 
   // 2=已完成
   if (status === 2) {
-    const transcript = parseAsrResult(task?.ResultStr || '')
-    return { status: 'success', transcript }
+    const resultStr = task?.ResultStr || ''
+    const transcript = parseAsrResult(resultStr)
+    return {
+      status: 'success',
+      transcript,
+      debug: {
+        statusCode: status,
+        statusStr,
+        resultStrPreview: resultStr.substring(0, 500),
+      },
+    }
   }
 
   // 3=失败
   return {
     status: 'failed',
     error: task?.ErrorMsg || '识别失败',
+    debug: {
+      statusCode: status,
+      statusStr,
+      errorMsg: task?.ErrorMsg || '',
+    },
   }
 }
