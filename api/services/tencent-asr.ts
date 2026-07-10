@@ -1,5 +1,6 @@
 // 腾讯云ASR服务 - 录音文件识别（异步模式）
-// 使用 Web Crypto API 实现 TC3-HMAC-SHA256 签名，兼容 Edge 环境
+// 使用 Node.js 原生 crypto 模块实现 TC3-HMAC-SHA256 签名
+import crypto from 'crypto'
 import type { TranscriptSegment } from '../../shared/types.js'
 
 const ASR_ENDPOINT = 'https://asr.tencentcloudapi.com/'
@@ -7,7 +8,7 @@ const HOST = 'asr.tencentcloudapi.com'
 const SERVICE = 'asr'
 const VERSION = '2019-06-14'
 
-// 环境变量读取（兼容 Node 与 Edge）
+// 环境变量读取
 function getEnvVar(name: string): string {
   if (typeof process !== 'undefined' && process.env && process.env[name]) {
     return process.env[name] as string
@@ -15,36 +16,20 @@ function getEnvVar(name: string): string {
   return ''
 }
 
-const encoder = new TextEncoder()
-
 /** SHA-256 摘要（hex） */
-async function sha256Hex(message: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', encoder.encode(message))
-  return buf2hex(buf)
+function sha256Hex(message: string): string {
+  return crypto.createHash('sha256').update(message, 'utf8').digest('hex')
 }
 
-/** HMAC-SHA256 */
-async function hmacSha256(
-  key: ArrayBuffer | string,
-  message: string,
-): Promise<ArrayBuffer> {
-  const keyData =
-    typeof key === 'string' ? encoder.encode(key) : new Uint8Array(key)
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  return crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(message))
+/** HMAC-SHA256（返回 Buffer） */
+function hmacSha256(key: Buffer | string, message: string): Buffer {
+  const keyData = typeof key === 'string' ? Buffer.from(key, 'utf8') : key
+  return crypto.createHmac('sha256', keyData).update(message, 'utf8').digest()
 }
 
-/** ArrayBuffer 转 hex 字符串 */
-function buf2hex(buffer: ArrayBuffer): string {
-  return [...new Uint8Array(buffer)]
-    .map((b) => ('00' + b.toString(16)).slice(-2))
-    .join('')
+/** Buffer 转 hex 字符串 */
+function buf2hex(buffer: Buffer): string {
+  return buffer.toString('hex')
 }
 
 /**
@@ -66,7 +51,7 @@ async function callAsrApi(action: string, payload: object): Promise<any> {
 
   // ===== 1. 拼接 CanonicalRequest =====
   // 注意：与官方 SDK sign3 一致，POST 只签 content-type 和 host，不签 x-tc-action
-  const hashedRequestPayload = await sha256Hex(payloadStr)
+  const hashedRequestPayload = sha256Hex(payloadStr)
   const canonicalHeaders =
     'content-type:application/json; charset=utf-8\n' + `host:${HOST}\n`
   const signedHeaders = 'content-type;host'
@@ -81,7 +66,7 @@ async function callAsrApi(action: string, payload: object): Promise<any> {
 
   // ===== 2. 拼接 StringToSign =====
   const credentialScope = `${date}/${SERVICE}/tc3_request`
-  const hashedCanonicalRequest = await sha256Hex(canonicalRequest)
+  const hashedCanonicalRequest = sha256Hex(canonicalRequest)
   const stringToSign = [
     'TC3-HMAC-SHA256',
     String(timestamp),
@@ -90,10 +75,10 @@ async function callAsrApi(action: string, payload: object): Promise<any> {
   ].join('\n')
 
   // ===== 3. 计算签名 =====
-  const secretDate = await hmacSha256('TC3' + secretKey, date)
-  const secretService = await hmacSha256(secretDate, SERVICE)
-  const secretSigning = await hmacSha256(secretService, 'tc3_request')
-  const signature = buf2hex(await hmacSha256(secretSigning, stringToSign))
+  const secretDate = hmacSha256('TC3' + secretKey, date)
+  const secretService = hmacSha256(secretDate, SERVICE)
+  const secretSigning = hmacSha256(secretService, 'tc3_request')
+  const signature = buf2hex(hmacSha256(secretSigning, stringToSign))
 
   // ===== 4. 拼接 Authorization =====
   const authorization =
