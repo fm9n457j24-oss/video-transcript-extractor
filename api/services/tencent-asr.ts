@@ -114,7 +114,8 @@ export async function createASRTask(
   const payload: Record<string, any> = {
     EngineModelType: '16k_zh',
     ChannelNum: 1,
-    ResTextFormat: 3,
+    // 使用0：纯文本结果，最稳定，避免格式3的JSON解析问题
+    ResTextFormat: 0,
   }
 
   if ('url' in source) {
@@ -127,6 +128,7 @@ export async function createASRTask(
   }
 
   const result: any = await callAsrApi('CreateRecTask', payload)
+  console.log('[ASR] CreateRecTask response:', JSON.stringify(result).substring(0, 1000))
 
   if (result?.Response?.Error) {
     throw new Error(result.Response.Error.Message || '创建ASR任务失败')
@@ -198,10 +200,13 @@ export async function pollASRTask(taskId: number): Promise<{
     statusStr?: string
     resultStrPreview?: string
     errorMsg?: string
+    allTaskKeys?: string[]
   }
 }> {
   const payload = { TaskId: taskId }
   const result: any = await callAsrApi('DescribeTaskStatus', payload)
+
+  console.log('[ASR] DescribeTaskStatus full response:', JSON.stringify(result).substring(0, 2000))
 
   if (result?.Response?.Error) {
     return {
@@ -215,11 +220,14 @@ export async function pollASRTask(taskId: number): Promise<{
   const status = task?.Status
   const statusStr = task?.StatusStr || ''
 
+  // 打印 task 对象的所有字段名，帮助定位结果字段
+  const allTaskKeys = task ? Object.keys(task) : []
+
   // 0=待处理 1=处理中
   if (status === 0 || status === 1) {
     return {
       status: 'processing',
-      debug: { statusCode: status, statusStr },
+      debug: { statusCode: status, statusStr, allTaskKeys },
     }
   }
 
@@ -234,6 +242,7 @@ export async function pollASRTask(taskId: number): Promise<{
         statusCode: status,
         statusStr,
         resultStrPreview: resultStr.substring(0, 500),
+        allTaskKeys,
       },
     }
   }
@@ -246,6 +255,7 @@ export async function pollASRTask(taskId: number): Promise<{
       statusCode: status,
       statusStr,
       errorMsg: task?.ErrorMsg || '',
+      allTaskKeys,
     },
   }
 }

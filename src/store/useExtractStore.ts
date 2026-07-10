@@ -63,7 +63,7 @@ export const useExtractStore = create<ExtractState>()((set, get) => {
           // 如果识别成功但文案为空，显示调试信息帮助排查
           if (transcript.length === 0) {
             const dbg = poll.debug
-              ? `（调试: status=${poll.debug.statusCode}, str=${poll.debug.statusStr || ''}, preview=${(poll.debug.resultStrPreview || '').substring(0, 200)}）`
+              ? `（调试: status=${poll.debug.statusCode}, str=${poll.debug.statusStr || ''}, keys=${poll.debug.allTaskKeys?.join(',') || ''}, preview=${(poll.debug.resultStrPreview || '').substring(0, 200)}）`
               : '';
             set({ status: 'error', error: `语音识别完成但未返回文案内容${dbg}` });
             return;

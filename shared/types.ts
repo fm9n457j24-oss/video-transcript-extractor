@@ -52,6 +52,7 @@ export interface ASRPollResponse {
     statusStr?: string;
     resultStrPreview?: string;
     errorMsg?: string;
+    allTaskKeys?: string[];
   };
 }
 
