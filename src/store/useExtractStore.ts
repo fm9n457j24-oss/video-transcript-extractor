@@ -121,12 +121,12 @@ export const useExtractStore = create<ExtractState>()((set, get) => {
           return;
         }
         // 直接返回数据（已有字幕）
-        if (resp.data && resp.data.transcript.length > 0) {
+        if (resp.data && resp.data.transcript && resp.data.transcript.length > 0) {
           set({ status: 'success', step: 4, result: resp.data });
           saveToHistory(resp.data, url);
           return;
         }
-        set({ status: 'error', error: '未知响应，请重试' });
+        set({ status: 'error', error: '提取失败：未获取到文案内容，请重试' });
       } catch (e) {
         set({ status: 'error', error: e instanceof Error ? e.message : '网络错误' });
       }

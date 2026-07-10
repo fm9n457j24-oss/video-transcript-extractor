@@ -4,6 +4,8 @@ import fs from 'fs'
 import path from 'path'
 import {
   extractBilibili,
+  getVideoInfo,
+  getAudioStreamUrl,
   downloadAudioFile,
   cleanupAudioFile,
 } from '../services/bilibili.js'
@@ -29,8 +31,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     const result = await extractBilibili(url)
 
-    // 有字幕：直接返回文案
-    if (result.subtitleSource === 'subtitle' && result.transcript) {
+    // 有字幕且内容非空：直接返回文案
+    if (
+      result.subtitleSource === 'subtitle' &&
+      result.transcript &&
+      result.transcript.length > 0
+    ) {
       res.json({
         success: true,
         data: {
@@ -42,8 +48,18 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return
     }
 
-    // 无字幕：下载音频 -> 创建 ASR 任务
-    if (!result.audioUrl) {
+    // 无字幕或字幕为空：获取音频流走 ASR
+    let audioUrl = result.audioUrl
+    if (!audioUrl) {
+      // 字幕为空时，extractBilibili 不会返回 audioUrl，需要重新获取
+      const bvid = result.videoInfo.bvid
+      if (bvid) {
+        const info = await getVideoInfo(bvid)
+        audioUrl = await getAudioStreamUrl(bvid, info.cid)
+      }
+    }
+
+    if (!audioUrl) {
       res
         .status(500)
         .json({ success: false, error: '无法获取音频流，请稍后重试' })
@@ -51,7 +67,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     }
 
     // B站CDN需要Referer头，不能直接让腾讯云下载
-    const { filePath, size } = await downloadAudioFile(result.audioUrl)
+    const { filePath, size } = await downloadAudioFile(audioUrl)
 
     let taskId: string
     try {
