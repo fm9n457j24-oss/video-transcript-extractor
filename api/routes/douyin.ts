@@ -42,10 +42,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     try {
       if (size <= MAX_DATA_SIZE) {
         // 小文件：base64编码后直接传给腾讯云（Data模式）
-        const videoBase64 = fs.readFileSync(filePath).toString('base64')
+        const videoBuffer = fs.readFileSync(filePath)
+        const videoBase64 = videoBuffer.toString('base64')
+        // DataLen 是原始文件字节数，不是base64字符串长度
         taskId = await createASRTask({
           data: videoBase64,
-          dataLen: videoBase64.length,
+          dataLen: videoBuffer.length,
         })
         cleanupVideoFile(filePath, 0)
       } else {

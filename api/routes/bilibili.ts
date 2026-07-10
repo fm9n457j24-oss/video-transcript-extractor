@@ -70,14 +70,19 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const { filePath, size } = await downloadAudioFile(audioUrl)
 
     let taskId: string
+    let debugInfo: Record<string, any> = { audioSize: size }
     try {
       if (size <= MAX_DATA_SIZE) {
         // 小文件：base64编码后直接传给腾讯云（Data模式）
-        const audioBase64 = fs.readFileSync(filePath).toString('base64')
+        const audioBuffer = fs.readFileSync(filePath)
+        const audioBase64 = audioBuffer.toString('base64')
+        debugInfo.base64Len = audioBase64.length
+        // DataLen 是原始音频字节数，不是base64字符串长度
         taskId = await createASRTask({
           data: audioBase64,
-          dataLen: audioBase64.length,
+          dataLen: audioBuffer.length,
         })
+        debugInfo.mode = 'data'
         // Data模式不需要保留文件，立即清理
         cleanupAudioFile(filePath, 0)
       } else {
@@ -87,7 +92,9 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         const proto =
           req.get('x-forwarded-proto') || req.protocol || 'https'
         const publicUrl = `${proto}://${host}/audio/temp/${path.basename(filePath)}`
+        debugInfo.publicUrl = publicUrl
         taskId = await createASRTask({ url: publicUrl })
+        debugInfo.mode = 'url'
         // 延迟清理，给腾讯云足够时间下载
         cleanupAudioFile(filePath, 30 * 60 * 1000)
       }
@@ -104,6 +111,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         subtitleSource: 'asr',
         transcript: [],
       },
+      debug: debugInfo,
     })
   } catch (err: any) {
     res

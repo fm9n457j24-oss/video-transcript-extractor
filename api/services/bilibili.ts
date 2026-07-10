@@ -38,11 +38,22 @@ export async function downloadAudioFile(
   if (!resp.ok || !resp.body) {
     throw new Error(`下载B站音频失败: HTTP ${resp.status}`)
   }
+  // 检查响应类型，B站防盗链可能返回HTML错误页而非音频
+  const contentType = resp.headers.get('content-type') || ''
+  if (contentType.includes('text/html')) {
+    throw new Error('B站音频URL返回了HTML页面（可能需要登录或已被防盗链拦截）')
+  }
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const filePath = path.join(AUDIO_TEMP_DIR, `${id}.m4a`)
   const fileStream = fs.createWriteStream(filePath)
   await pipeline(Readable.fromWeb(resp.body as any), fileStream)
   const size = fs.statSync(filePath).size
+  // 文件过小（<1KB）通常是错误响应
+  if (size < 1024) {
+    const content = fs.readFileSync(filePath, 'utf8').substring(0, 200)
+    fs.unlinkSync(filePath)
+    throw new Error(`下载的音频文件过小（${size}字节），内容: ${content}`)
+  }
   return { filePath, size }
 }
 
