@@ -11,7 +11,7 @@ import { createASRTask } from '../services/tencent-asr.js'
 
 const router = Router()
 
-const MAX_DATA_SIZE = 5 * 1024 * 1024 // 5MB - 腾讯云ASR Data模式限制
+const MAX_DATA_SIZE = 3 * 1024 * 1024 // 3MB - 控制base64内存占用
 
 /**
  * POST /api/bilibili - 提取B站文案

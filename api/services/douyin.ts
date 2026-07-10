@@ -2,6 +2,8 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { pipeline } from 'stream/promises'
+import { Readable } from 'stream'
 import type { VideoInfo } from '../../shared/types.js'
 
 const DOUYIN_UA =
@@ -17,7 +19,7 @@ try {
 } catch {}
 
 /**
- * 下载抖音视频到临时文件
+ * 下载抖音视频到临时文件（流式写入，避免大文件OOM）
  * 抖音CDN需要特定请求头，否则可能被拒绝
  */
 export async function downloadVideoFile(
@@ -29,15 +31,15 @@ export async function downloadVideoFile(
       Referer: DOUYIN_REFERER,
     },
   })
-  if (!resp.ok) {
+  if (!resp.ok || !resp.body) {
     throw new Error(`下载抖音视频失败: HTTP ${resp.status}`)
   }
-  const arrayBuffer = await resp.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const filePath = path.join(VIDEO_TEMP_DIR, `${id}.mp4`)
-  fs.writeFileSync(filePath, buffer)
-  return { filePath, size: buffer.length }
+  const fileStream = fs.createWriteStream(filePath)
+  await pipeline(Readable.fromWeb(resp.body as any), fileStream)
+  const size = fs.statSync(filePath).size
+  return { filePath, size }
 }
 
 /**

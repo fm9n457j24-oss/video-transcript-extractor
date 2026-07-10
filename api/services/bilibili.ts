@@ -2,6 +2,8 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { pipeline } from 'stream/promises'
+import { Readable } from 'stream'
 import type {
   TranscriptSegment,
   VideoInfo,
@@ -21,7 +23,7 @@ try {
 } catch {}
 
 /**
- * 下载音频到临时文件
+ * 下载音频到临时文件（流式写入，避免大文件OOM）
  * B站CDN需要 Referer 头，否则返回403，腾讯云ASR直接下载会失败
  */
 export async function downloadAudioFile(
@@ -33,15 +35,15 @@ export async function downloadAudioFile(
       Referer: 'https://www.bilibili.com',
     },
   })
-  if (!resp.ok) {
+  if (!resp.ok || !resp.body) {
     throw new Error(`下载B站音频失败: HTTP ${resp.status}`)
   }
-  const arrayBuffer = await resp.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const filePath = path.join(AUDIO_TEMP_DIR, `${id}.m4a`)
-  fs.writeFileSync(filePath, buffer)
-  return { filePath, size: buffer.length }
+  const fileStream = fs.createWriteStream(filePath)
+  await pipeline(Readable.fromWeb(resp.body as any), fileStream)
+  const size = fs.statSync(filePath).size
+  return { filePath, size }
 }
 
 /**
