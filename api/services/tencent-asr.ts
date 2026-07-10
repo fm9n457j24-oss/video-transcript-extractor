@@ -233,7 +233,8 @@ export async function pollASRTask(taskId: number): Promise<{
 
   // 2=已完成
   if (status === 2) {
-    const resultStr = task?.ResultStr || ''
+    // 腾讯云返回结果在 Result 字段（ResTextFormat=0 为纯文本，=3 为 JSON）
+    const resultStr = task?.Result || task?.ResultStr || ''
     const transcript = parseAsrResult(resultStr)
     return {
       status: 'success',
